@@ -26,7 +26,7 @@
 npm i -g pnpm
 
 # 克隆此项目
-git clone https://github.com/ccbikai/cloudflare-worker-image.git
+git clone  https://github.com/ccbikai/cloudflare-worker-image.git
 cd cloudflare-worker-image
 
 # 安装依赖
