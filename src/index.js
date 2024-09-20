@@ -1,5 +1,3 @@
-import queryString from 'query-string';
-
 import * as photon from '@silvia-odwyer/photon';
 import PHOTON_WASM from '../node_modules/@silvia-odwyer/photon/photon_rs_bg.wasm';
 
@@ -23,33 +21,22 @@ const OUTPUT_FORMATS = {
 
 // 支持的图片格式
 const supportImages = ['png', 'jpg', 'jpeg', 'webp']
-
-const multipleImageMode = ['watermark', 'blend'];
-
-// const inWhiteList = (env, url) => {
-// 	const imageUrl = new URL(url);
-// 	const whiteList = env.WHITE_LIST ? env.WHITE_LIST.split(',') : [];
-// 	return !(whiteList.length && !whiteList.find((hostname) => imageUrl.hostname.endsWith(hostname)));
-// };
+// const multipleImageMode = ['watermark', 'blend'];
 
 const processImage = async (env, request, inputImage, pipeAction) => {
 	const [action, options = ''] = pipeAction.split('!');
 	let params = options.split(',');
-
 	params = params.map( item => {
 		if (item.startsWith('rgba_')) {
-			const rgba = item.replace('rgba_', '').split('_');
-			if (rgba.length === 4) {
-				return new photon.Rgba( ...rgba );
-			} else {
-				return new photon.Rgba(255, 255, 255, 255)
-			}
+			const rgba = item.replace('rgba_', '').split('_').map(Number);
+			return rgba.length === 4 ? new photon.Rgba( ...rgba ) :  new photon.Rgba(255, 255, 255, 255);
 		} else {
 			return item
 		}
 	})
 
-	if (multipleImageMode.includes(action)) {
+	return photon[action](inputImage, ...params);
+	/*if (multipleImageMode.includes(action)) {
 		const image2 = params.shift(); // 是否需要 decodeURIComponent ?
 		if (image2) {
 			const image2Res = await fetch(image2, { headers: request.headers });
@@ -62,12 +49,8 @@ const processImage = async (env, request, inputImage, pipeAction) => {
 		}
 	} else {
 		return photon[action](inputImage, ...params);
-	}
+	}*/
 };
-
-function isNumeric(value) {
-	return !isNaN(value) && !isNaN(parseFloat(value));
-}
 
 /**
  * 生成居中裁剪的 @silvia-odwyer/photon 的 crop 命令。
@@ -79,8 +62,7 @@ function isNumeric(value) {
  * @returns {string} crop 命令字符串。
  */
 function generateCropCommand(originalWidth, originalHeight, targetWidth, targetHeight) {
-	let cropWidth, cropHeight, padding;
-	// let padX = 0, padY = 0, padLeft = 0, padRight = 0, padTop = 0, padBottom = 0;
+	let cropWidth, cropHeight;
 
 	// 如果只提供宽度，则按比例计算高度
 	if (targetWidth && !targetHeight) {
@@ -96,20 +78,6 @@ function generateCropCommand(originalWidth, originalHeight, targetWidth, targetH
 	else if (targetWidth && targetHeight) {
 		cropWidth = Math.min(targetWidth, originalWidth);
 		cropHeight = Math.min(targetHeight, originalHeight);
-
-		// if (targetWidth > originalWidth || targetHeight > originalHeight) {
-		// 	// 计算填充尺寸
-		// 	padX = Math.max(0, targetWidth - cropWidth);
-		// 	padY = Math.max(0, targetHeight - cropHeight);
-		// 	// 计算左右和上下的补白
-		// 	if (padX > 0) {
-		// 		padLeft = Math.floor(padX / 2);
-		// 		padRight = padX - padLeft;
-		// 	} else if (padY > 0) {
-		// 		padTop = Math.floor(padY / 2);
-		// 		padBottom = padY - padTop;
-		// 	}
-		// }
 	}
 	// 如果宽度和高度都没有提供，直接返回原图尺寸
 	else {
@@ -126,30 +94,6 @@ function generateCropCommand(originalWidth, originalHeight, targetWidth, targetH
 	const y2 = y1 + cropHeight;
 
 	return `crop!${x1},${y1},${x2},${y2}`;
-
-	// 返回 crop 命令字符串，格式为 crop!${x1},${y1},${x2},${y2}
-	// let command = `crop!${x1},${y1},${x2},${y2}`;
-	// console.log('padding:', padding)
-	// if (padX === 0 && padY === 0) {
-	// 	return command;
-	// }
-	//
-	// // 如果需要补白，添加四边补白命令
-	// const rgba= 'rgba_0_0_0_0'
-	// if (padLeft > 0) {
-	// 	command += `|padding_left!${padLeft},${rgba}`;
-	// }
-	// if (padRight > 0) {
-	// 	command += `|padding_right!${padRight},${rgba}`;
-	// }
-	// if (padTop > 0) {
-	// 	command += `|padding_top!${padTop},${rgba}`;
-	// }
-	// if (padBottom > 0) {
-	// 	command += `|padding_bottom!${padBottom},${rgba}`;
-	// }
-	//
-	// return command;
 }
 
 /**
@@ -163,7 +107,6 @@ function generateCropCommand(originalWidth, originalHeight, targetWidth, targetH
  */
 function generateAspectRatioResizeCommand(originalWidth, originalHeight, targetWidth, targetHeight) {
 	let resizedWidth, resizedHeight;
-	// let padX = 0, padY = 0, padLeft = 0, padRight = 0, padTop = 0, padBottom = 0;
 
 	// 如果只提供了 targetWidth 或 targetHeight，按比例调整另一个值
 	if (targetWidth && !targetHeight) {
@@ -184,18 +127,6 @@ function generateAspectRatioResizeCommand(originalWidth, originalHeight, targetW
 			resizedWidth = Math.round(originalWidth * heightRatio);
 			resizedHeight = targetHeight;
 		}
-
-		// 计算补白的像素数
-		/*padX = Math.max(0, targetWidth - resizedWidth);
-		padY = Math.max(0, targetHeight - resizedHeight);
-    // 计算左右和上下的补白
-		if (padX > 0) {
-			padLeft = Math.floor(padX / 2);
-			padRight = padX - padLeft;
-		} else if (padY > 0) {
-			padTop = Math.floor(padY / 2);
-			padBottom = padY - padTop;
-		}*/
 	} else {
 		// 没有指定目标尺寸的情况下，返回原始尺寸
 		resizedWidth = originalWidth;
@@ -203,30 +134,6 @@ function generateAspectRatioResizeCommand(originalWidth, originalHeight, targetW
 	}
 
 	return `resize!${resizedWidth},${resizedHeight},5`;
-
-	// 生成 resize 命令
-	/*let resizeCommand = `resize!${resizedWidth},${resizedHeight},5`;
-	if (padX === 0 && padY === 0) {
-		return resizeCommand;
-	}
-
-	// 如果需要补白，添加四边补白命令
-	const rgba= 'rgba_0_0_0_0'
-	if (padLeft > 0) {
-		resizeCommand += `|padding_left!${padLeft},${rgba}`;
-	}
-	if (padRight > 0) {
-		resizeCommand += `|padding_right!${padRight},${rgba}`;
-	}
-	if (padTop > 0) {
-		resizeCommand += `|padding_top!${padTop},${rgba}`;
-	}
-	if (padBottom > 0) {
-		resizeCommand += `|padding_bottom!${padBottom},${rgba}`;
-	}
-
-	// 返回 resize 命令字符串
-	return resizeCommand;*/
 }
 
 /**
@@ -234,21 +141,60 @@ function generateAspectRatioResizeCommand(originalWidth, originalHeight, targetW
  */
 export default {
 	async fetch(request, env, context) {
-		console.log('request:', request.url);
+		// 校验CORS
+		let referer = request.headers.get('referer');
+		// 允许*.webify.top访问
+		const allowedOriginSuffix = '.webify.top';
+
+		// 设置为默认的允许域名
+		let allowOriginHeader = 'https://webify.top';
+		if (referer) {
+			// 去掉 / 避免查询不到
+			referer = referer.endsWith('/') ? referer.slice(0, -1) : referer;
+			if (referer.includes(allowedOriginSuffix)) {
+				allowOriginHeader = referer;
+			} else {
+				// 允许本地调试的域名访问
+				const arrowDomains = [
+					"http://localhost:3000",
+					"http://localhost:4000",
+					"http://localhost:4300",
+					"http://localhost:4400",
+					"http://localhost:8848",
+					"http://localhost:8787",
+				];
+
+				if (arrowDomains.includes(referer)) {
+					allowOriginHeader = referer;
+				} else {
+					// 如果不符合允许的域名，返回 CORS 错误
+					console.error("not allow cors origin: ", referer)
+					// 如果 Origin 不符合条件，返回 CORS 错误
+					return new Response('CORS policy: No Access', { status: 403 });
+				}
+			}
+		}
+
+
 
 		// 如果图片没有带参数直接返回
 		let requestUrl = request.url;
-		requestUrl = requestUrl.replace('http://127.0.0.1:8787', 'https://img.webify.top');
+		console.log('requestUrl', requestUrl);
+		// 本地测试需要替换
+		requestUrl = requestUrl.replace('http://127.0.0.1:8787', 'https://cdn.webify.top');
 
 		// 必须是这个域名的请求，其他都是非法
-		if (!requestUrl.includes('img.webify.top')) {
+		if (!requestUrl.includes('cdn.webify.top')) {
 			return new Response('Forbidden Request', {
 				status: 403,
 			});
 		}
 
+		// 使用cdn访问图片
+		// requestUrl = requestUrl.replace('https://img.webify.top', 'https://cdn.webify.top')
+
 		// 读取缓存
-		const cacheUrl = new URL(request.url);
+		const cacheUrl = new URL(requestUrl);
 		// 获取路径部分
 		const pathname = cacheUrl.pathname;
 		// 使用正则表达式或者split方法获取后缀名
@@ -264,45 +210,56 @@ export default {
 		const cache = caches.default;
 		const hasCache = await cache.match(cacheKey);
 		if (hasCache) {
-			console.log('cache: true');
 			return hasCache;
 		}
 
 		// 入参提取与校验
-		const query = queryString.parse(cacheUrl.search);
-		const { f, q= 80 } = query;
+		// 从 URL 中解析查询参数
+		const paths = requestUrl.split('?');
+		const originalUrl = paths[0];
+		const params = new URLSearchParams(paths[1]);
 
+    // 获取图像宽高参数
 		// 图片质量
-		const quality = q;
-		const url = requestUrl
+		const width = parseInt(params.get('w'), 10) || 0;
+		const height = parseInt(params.get('h'), 10) || 0;
+		const mode = params.get('m') || 'contain';  // 获取裁剪模式
+		const quality = parseInt(params.get('q'), 10) || 80;
 
-		console.log('extension:', extension)
-
-		let format
-		if (f && supportImages.includes(f)) {
-			format = f;
-		} else {
-			// 获取请求头中的 Accept 字段
+		const f = params.get('f');  // 获取图片转换的格式
+		let format = f && supportImages.includes(f) ? f : extension;
+		if (!f) {
 			const acceptHeader = request.headers.get('Accept');
-			console.log('acceptHeader:', acceptHeader)
-			// 判断是否支持 WebP 格式
 			const supportsWebP = acceptHeader && acceptHeader.includes('image/webp');
-			console.log('supportsWebP:', supportsWebP)
-			if (supportsWebP) {
-				format = 'webp'
-			} else {
-				format = extension
-			}
+			format = supportsWebP ? 'webp' : extension;
 		}
-
-		console.log('params:', url, format, quality);
 
 		// 目标图片获取与检查
 		let imageRes
 		try {
-			imageRes = await fetch(url, { headers: request.headers });
-			if (!imageRes.ok) {
-				return imageRes;
+			// 尝试从缓存中读取图片
+			// 替换 public URL 为 Cloudflare R2 的内部访问路径
+
+			// https://adc4d5cedab6dd101123347e185ad42b.r2.cloudflarestorage.com/webify
+			const internalUrl = originalUrl.replace('https://cdn.webify.top', 'https://adc4d5cedab6dd101123347e185ad42b.r2.cloudflarestorage.com/webify');
+			console.log('internalUrl: ', internalUrl);
+			// const originalUrlKey = originalUrl + '?original';
+			imageRes = await cache.match(internalUrl);
+			if (!imageRes) {
+				// 请求获取图片
+				// 发起请求时添加 X-CF-Worker 标头，避免再次触发 Worker
+				imageRes = await fetch(originalUrl, { headers: {
+						...request.headers,
+						'X-CF-Worker': 'true'
+					}
+				});
+				if (!imageRes.ok) {
+					return imageRes;
+				}
+				// 写入缓存
+				context.waitUntil(cache.put(internalUrl, imageRes.clone()));
+			} else {
+				console.log('loading from cache: ', internalUrl);
 			}
 		} catch (e) {
 			console.error(e);
@@ -311,53 +268,28 @@ export default {
 				status: 500,
 			});
 		}
-		console.log('fetch image done');
-
 		// 根据url计算 action参数
 		let action = ''
-
 		const imageBytes = new Uint8Array(await imageRes.arrayBuffer());
+		let inputImage, outputImage;
 		try {
-			const inputImage = photon.PhotonImage.new_from_byteslice(imageBytes);
-			console.log('create inputImage done, width:', inputImage.get_width(), 'height:', inputImage.get_height());
-			let { w, h, m = 'contain' } = query
-
-			const mode = m;
+			inputImage = photon.PhotonImage.new_from_byteslice(imageBytes);
 			const originalWidth = inputImage.get_width();
 			const originalHeight = inputImage.get_height();
-			let targetWidth, targetHeight
-			if (isNumeric(w)) {
-				targetWidth = parseFloat(w)
-			}
-			if (isNumeric(h)) {
-				targetHeight = parseFloat(h)
-			}
-
-			if (targetWidth || targetHeight) {
-				// targetWidth = targetWidth || originalWidth
-				// targetHeight = targetHeight || originalHeight
-
+			if (width > 0 || height > 0) {
 				if (mode === 'cover') {
 					// 居中裁剪 cover
-					action += generateCropCommand(originalWidth, originalHeight, targetWidth, targetHeight)
+					action += generateCropCommand(originalWidth, originalHeight, width, height)
 				} else {
 					// 等比压缩 contain
-					action += generateAspectRatioResizeCommand(originalWidth, originalHeight, targetWidth, targetHeight)
+					action += generateAspectRatioResizeCommand(originalWidth, originalHeight, width, height)
 				}
 			}
-
-			console.log('=====actions:', action)
-			/** pipe
-			 * `resize!800,400,1|watermark!https%3A%2F%2Fmt.ci%2Flogo.png,10,10,10,10`
-			 */
-
-			const pipe = action.split('|');
-			const outputImage = await pipe.filter(Boolean).reduce(async (result, pipeAction) => {
+			const pipe = action.split('|').filter(Boolean);
+			outputImage = await pipe.filter(Boolean).reduce(async (result, pipeAction) => {
 				result = await result;
 				return (await processImage(env, request, result, pipeAction)) || result;
 			}, inputImage);
-			console.log('create outputImage done');
-
 			// 图片编码
 			let outputImageData;
 			if (format === 'jpeg' || format === 'jpg') {
@@ -367,32 +299,29 @@ export default {
 			} else {
 				outputImageData = await encodeWebp(outputImage.get_image_data(), { quality });
 			}
-			console.log('create outputImageData done');
-
 			// 返回体构造
 			const imageResponse = new Response(outputImageData, {
 				headers: {
 					'content-type': OUTPUT_FORMATS[format],
-					'cache-control': 'public,max-age=300' // 缓存5分钟测试
-					// 'cache-control': 'public,max-age=2592000', // 缓存1个月
+					// 'cache-control': 'public,max-age=300' // 缓存5分钟测试
+					'cache-control': 'public,max-age=2592000', // 缓存1个月
+					'Access-Control-Allow-Origin': allowOriginHeader
 				}
 			});
-
-			// 释放资源
-			inputImage.ptr && inputImage.free();
-			outputImage.ptr && outputImage.free();
-			console.log('image free done');
 
 			// 写入缓存
 			context.waitUntil(cache.put(cacheKey, imageResponse.clone()));
 			return imageResponse;
 		} catch (error) {
 			console.error('process:error', error.name, error.message, error);
-			const errorResponse = new Response(imageBytes || null, {
+			return new Response(imageBytes || null, {
 				headers: imageRes.headers,
 				status: 'RuntimeError' === error.name ? 415 : 500,
 			});
-			return errorResponse;
+		} finally {
+			// 释放资源
+			inputImage.ptr && inputImage.free();
+			outputImage.ptr && outputImage.free();
 		}
-	},
+	}
 };
